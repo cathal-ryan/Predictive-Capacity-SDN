@@ -232,16 +232,16 @@ class ShortestForwarding(app_manager.RyuApp):
         try:
             paths = shortest_paths.get(src).get(dst)
             if p:
-                return paths[0]
-            else:
                 return paths[1]
+            else:
+                return paths[0]
         except:
             paths = self.awareness.k_shortest_paths(graph, src, dst,
                                                     weight='hop')
             shortest_paths.setdefault(src, {})
             shortest_paths[src].setdefault(dst, paths)
             if p:
-                return paths[0]
+                return paths[1]
             else:
                 return paths[0]
 
@@ -345,14 +345,13 @@ class ShortestForwarding(app_manager.RyuApp):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
         in_port = msg.match['in_port']
-        print("hi")
         p = False
         result = self.get_sw(datapath.id, in_port, ip_src, ip_dst)
         if result:
             src_sw, dst_sw = result[0], result[1]
             #print(ip_dst)
             if(ip_dst == "10.0.0.4"):
-                p=False
+                p=True
             if dst_sw:
                 path = self.get_path(src_sw, dst_sw, p, weight=self.weight)
                 #self.logger.info("[PATH]%s<-->%s: %s" % (ip_src, ip_dst, path))

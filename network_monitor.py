@@ -80,7 +80,7 @@ class NetworkMonitor(app_manager.RyuApp):
         """
             Main entry method of monitoring traffic.
         """
-        k=0
+        k=0; b=0
         while 1:
             self.stats['flow'] = {}
             self.stats['port'] = {}
@@ -93,9 +93,10 @@ class NetworkMonitor(app_manager.RyuApp):
                 self.best_paths = None
             hub.sleep(setting.MONITOR_PERIOD)
             k=k+1
-            if k >10:
+            if k >20:
+                b=b+1
                 if self.stats['flow'] or self.stats['port']:
-                    self.show_stat('flow')
+                    self.show_stat('flow',b)
                     #self.show_stat('port') #Dont care about port stats rn
             #hub.sleep(1)
     def _save_bw_graph(self):
@@ -390,7 +391,7 @@ class NetworkMonitor(app_manager.RyuApp):
         else:
             print("switch%d: Illeagal port state %s %s" % (port_no, reason))
 
-    def show_stat(self, type):
+    def show_stat(self, type, b):
         '''
             Show statistics info according to data type.
             type: 'port' 'flow'
@@ -399,6 +400,9 @@ class NetworkMonitor(app_manager.RyuApp):
             return
 
         bodys = self.stats[type] # gives the {} stats
+
+        pl3=0
+        pl4=0
         if(type == 'flow'):
             print('datapath         ''   in-port        ip-dst              ip-src      nw_proto '
                   'out-port packets  bytes  flow-speed(B/s)')
@@ -415,24 +419,35 @@ class NetworkMonitor(app_manager.RyuApp):
                         continue
                     elif proto is None:
                         continue
-                    if ipv4 == "10.0.0.1":
-                        continue
-                    if ipv4 == "10.0.0.2":
+                    if ipv4 != "10.0.0.3" and ipv4 != "10.0.0.4":
                         continue
                     if stat.cookie >= 9000:
                         continue
+                    
+                    ## checks completed, we're in a flow we actually care about.
+                    speed = abs(self.flow_speed[dpid][
+                            (stat.match.get('in_port'),
+                            stat.match.get('ipv4_dst'),
+                            stat.match.get('ipv4_src'), 
+                            proto,stat.cookie,
+                            stat.instructions[0].actions[0].port)][-1]*8/10**6)
                     print(('%016x %8x %17s %17s %8x %8d %8d %8d %8.4f' % (
                         dpid,
                         stat.match['in_port'], stat.match['ipv4_dst'], stat.match['ipv4_src'],
                         proto,
                         stat.instructions[0].actions[0].port,
-                        stat.packet_count, stat.byte_count,
-                        abs(self.flow_speed[dpid][
-                            (stat.match.get('in_port'),
-                            stat.match.get('ipv4_dst'),
-                            stat.match.get('ipv4_src'), 
-                            proto,stat.cookie,
-                            stat.instructions[0].actions[0].port)][-1]*8/10**6))))
+                        stat.packet_count, stat.byte_count, speed
+                        )))
+                    if(dpid==3 and b>40 and speed < 1*10**-4):
+                        pl3 = stat.packet_count
+                    if(dpid==4 and b>40 and speed < 1*10**-4):
+                        pl4 = stat.packet_count
+                    try:
+                        if(pl3!=0 and pl4!=0):
+                            PacketLoss=1-pl4/pl3
+                            print("Packet Loss:", PacketLoss)
+                    except:
+                        pass
             print('\n')
 
         # if(type == 'port'):
